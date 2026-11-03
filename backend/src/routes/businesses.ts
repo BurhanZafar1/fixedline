@@ -2,14 +2,51 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.middleware';
 import { supabase, getBusinessById, updateBusiness } from '../db/supabase';
-import { getAuthUrl, exchangeCodeForTokens, disconnectCalendar } from '../services/calendar.service';
+import { getAuthUrl, exchangeCodeForTokens, disconnectCalendar, parseOAuthState } from '../services/calendar.service';
 import { createStripeCustomer, createCheckoutSession, createBillingPortalSession } from '../services/stripe.service';
 import { provisionPhoneNumber } from '../services/twilio.service';
 import { encrypt } from '../utils/crypto';
 import logger from '../utils/logger';
 
 const router = Router();
+
+// ──────────────────────────────────────────────────────────────
+// GET /businesses/calendar/callback  — Google OAuth callback
+// Registered before requireAuth: Google redirects the browser here without a
+// Bearer token, so the business is identified by the encrypted state param.
+// ──────────────────────────────────────────────────────────────
+router.get('/calendar/callback', async (req: Request, res: Response): Promise<void> => {
+  const { code, state, error } = req.query as {
+    code?: string;
+    state?: string;
+    error?: string;
+  };
+
+  const frontendUrl = process.env['FRONTEND_URL'] ?? 'http://localhost:3000';
+
+  const businessId = state ? parseOAuthState(state) : null;
+
+  if (error || !code || !businessId) {
+    res.redirect(`${frontendUrl}/onboarding?step=4&error=calendar_denied`);
+    return;
+  }
+
+  try {
+    const tokens = await exchangeCodeForTokens(code);
+    await updateBusiness(businessId, {
+      google_calendar_token_encrypted: encrypt(JSON.stringify(tokens)),
+    });
+
+    res.redirect(`${frontendUrl}/onboarding?step=5&calendar=connected`);
+  } catch (err) {
+    logger.error('Google Calendar OAuth callback error', { err });
+    res.redirect(`${frontendUrl}/onboarding?step=4&error=calendar_failed`);
+  }
+});
+
+// All routes below require a signed-in user
 router.use(requireAuth);
+
 
 // ──────────────────────────────────────────────────────────────
 // GET /businesses/me  — get the current user's business
@@ -40,7 +77,7 @@ router.get('/me', async (req: Request, res: Response): Promise<void> => {
 const createBusinessSchema = z.object({
   name: z.string().min(2).max(100),
   owner_name: z.string().min(2).max(100),
-  phone_number: z.string().regex(/^\+1\d{10}$/, 'Phone must be E.164 format e.g. +12025551234'),
+  phone_number: z.string().regex(/^\+1\d{10}$/, 'Phone must be E.164 format e.g. +12025550123'),
   timezone: z.string().default('America/New_York'),
 });
 
@@ -84,6 +121,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 // ──────────────────────────────────────────────────────────────
 // PATCH /businesses/me  — update business settings
 // ──────────────────────────────────────────────────────────────
+const dayHoursSchema = z.object({
+  enabled: z.boolean(),
+  start: z.string().regex(/^\d{2}:\d{2}$/),
+  end: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
 const updateBusinessSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   owner_name: z.string().min(2).max(100).optional(),
@@ -94,11 +137,16 @@ const updateBusinessSchema = z.object({
     price_min: z.number().min(0),
     price_max: z.number().min(0),
   })).optional(),
-  working_hours: z.record(z.object({
-    enabled: z.boolean(),
-    start: z.string().regex(/^\d{2}:\d{2}$/),
-    end: z.string().regex(/^\d{2}:\d{2}$/),
-  })).optional(),
+  // All seven days are required so the scheduling prompt never reads a missing day
+  working_hours: z.object({
+    monday: dayHoursSchema,
+    tuesday: dayHoursSchema,
+    wednesday: dayHoursSchema,
+    thursday: dayHoursSchema,
+    friday: dayHoursSchema,
+    saturday: dayHoursSchema,
+    sunday: dayHoursSchema,
+  }).optional(),
   timezone: z.string().optional(),
   ai_enabled: z.boolean().optional(),
   google_calendar_id: z.string().optional(),
@@ -170,7 +218,7 @@ router.post('/me/provision-number', async (req: Request, res: Response): Promise
 
   const webhookBase = process.env['RAILWAY_PUBLIC_DOMAIN']
     ? `https://${process.env['RAILWAY_PUBLIC_DOMAIN']}`
-    : process.env['BACKEND_URL'] ?? 'https://api.fixedline.app';
+    : process.env['BACKEND_URL'] ?? 'http://localhost:3001';
 
   const phoneNumber = await provisionPhoneNumber(area_code, webhookBase);
   await updateBusiness(business.id, { twilio_number: phoneNumber });
@@ -197,37 +245,6 @@ router.get('/me/calendar/auth', async (req: Request, res: Response): Promise<voi
 
   const authUrl = getAuthUrl(business.id);
   res.json({ auth_url: authUrl });
-});
-
-// ──────────────────────────────────────────────────────────────
-// GET /businesses/me/calendar/callback  — Google OAuth callback
-// (also called from the frontend redirect)
-// ──────────────────────────────────────────────────────────────
-router.get('/calendar/callback', async (req: Request, res: Response): Promise<void> => {
-  const { code, state: businessId, error } = req.query as {
-    code?: string;
-    state?: string;
-    error?: string;
-  };
-
-  const frontendUrl = process.env['FRONTEND_URL'] ?? 'http://localhost:3000';
-
-  if (error || !code || !businessId) {
-    res.redirect(`${frontendUrl}/onboarding?step=4&error=calendar_denied`);
-    return;
-  }
-
-  try {
-    const tokens = await exchangeCodeForTokens(code);
-    await updateBusiness(businessId, {
-      google_calendar_token_encrypted: encrypt(JSON.stringify(tokens)),
-    });
-
-    res.redirect(`${frontendUrl}/onboarding?step=5&calendar=connected`);
-  } catch (err) {
-    logger.error('Google Calendar OAuth callback error', { err });
-    res.redirect(`${frontendUrl}/onboarding?step=4&error=calendar_failed`);
-  }
 });
 
 // ──────────────────────────────────────────────────────────────

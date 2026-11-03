@@ -108,7 +108,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="input"
-                  placeholder="john@smithhvac.com"
+                  placeholder="owner@example.com"
                   required
                   autoComplete="email"
                 />

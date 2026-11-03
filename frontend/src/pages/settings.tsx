@@ -14,6 +14,15 @@ import { api, type ServiceOffering, type WorkingHours } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const DEFAULT_HOURS: WorkingHours = {
+  monday: { enabled: true, start: '08:00', end: '18:00' },
+  tuesday: { enabled: true, start: '08:00', end: '18:00' },
+  wednesday: { enabled: true, start: '08:00', end: '18:00' },
+  thursday: { enabled: true, start: '08:00', end: '18:00' },
+  friday: { enabled: true, start: '08:00', end: '18:00' },
+  saturday: { enabled: false, start: '09:00', end: '13:00' },
+  sunday: { enabled: false, start: '09:00', end: '13:00' },
+};
 const DAY_LABELS: Record<string, string> = {
   monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
   friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
@@ -36,7 +45,7 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
   const [services, setServices] = useState<ServiceOffering[]>([]);
-  const [workingHours, setWorkingHours] = useState<WorkingHours>({});
+  const [workingHours, setWorkingHours] = useState<WorkingHours>(DEFAULT_HOURS);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -46,7 +55,7 @@ export default function SettingsPage() {
       setPhone(business.phone_number);
       setTimezone(business.timezone);
       setServices(business.services ?? []);
-      setWorkingHours(business.working_hours ?? {});
+      setWorkingHours({ ...DEFAULT_HOURS, ...(business.working_hours ?? {}) });
     }
   }, [business]);
 
@@ -168,7 +177,7 @@ export default function SettingsPage() {
                   className="input"
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
-                  placeholder="+12025551234"
+                  placeholder="+12025550123"
                   required
                 />
               </div>

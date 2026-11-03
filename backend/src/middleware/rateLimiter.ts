@@ -22,7 +22,7 @@ export const authLimiter = rateLimit({
 // Key on the From number so one spammer can't block all processing
 export const smsLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 10,             // 10 messages per minute per IP (Twilio IPs)
+  max: 10,             // 10 messages per minute per sending number
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {

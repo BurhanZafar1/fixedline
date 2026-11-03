@@ -14,12 +14,31 @@ const oauth2Client = new google.auth.OAuth2(
 // OAuth helpers
 // ──────────────────────────────────────────────────────────────
 
+const OAUTH_STATE_MAX_AGE_MS = 15 * 60 * 1000;
+
+// The OAuth state is encrypted with AES-256-GCM, so it cannot be forged or
+// altered: a caller cannot attach their Google tokens to another business.
+export function createOAuthState(businessId: string): string {
+  return encrypt(JSON.stringify({ b: businessId, t: Date.now() }));
+}
+
+export function parseOAuthState(state: string): string | null {
+  try {
+    const { b, t } = JSON.parse(decrypt(state)) as { b?: string; t?: number };
+    if (!b || typeof t !== 'number') return null;
+    if (Date.now() - t > OAUTH_STATE_MAX_AGE_MS) return null;
+    return b;
+  } catch {
+    return null;
+  }
+}
+
 export function getAuthUrl(businessId: string): string {
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent', // always get refresh_token
     scope: ['https://www.googleapis.com/auth/calendar'],
-    state: businessId, // pass businessId through the OAuth flow
+    state: createOAuthState(businessId),
   });
 }
 

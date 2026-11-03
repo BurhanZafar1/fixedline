@@ -63,7 +63,7 @@ export default function DashboardPage() {
     try {
       await api.businesses.update({ ai_enabled: next });
       await mutateBiz();
-      toast.success(next ? 'AI enabled — responding to customers' : 'AI paused — you're in control');
+      toast.success(next ? 'AI enabled: responding to customers' : "AI paused: you're in control");
     } catch {
       toast.error('Failed to update AI status');
     }

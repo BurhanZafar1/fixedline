@@ -125,7 +125,7 @@ export default function OnboardingPage() {
       return;
     }
     if (!/^\+1\d{10}$/.test(phone)) {
-      toast.error('Phone must be in format +12025551234');
+      toast.error('Phone must be in format +12025550123');
       return;
     }
     setLoading(true);
@@ -302,7 +302,7 @@ export default function OnboardingPage() {
                       className="input"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
-                      placeholder="+12025551234"
+                      placeholder="+12025550123"
                     />
                     <p className="text-xs text-gray-400 mt-1">
                       We&apos;ll text you when a new job is booked. Format: +1 then 10 digits.

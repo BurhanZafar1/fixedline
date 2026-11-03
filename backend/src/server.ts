@@ -56,11 +56,11 @@ app.use(
 );
 
 // ── CORS ──────────────────────────────────────────────────────
-const allowedOrigins = [
-  process.env['FRONTEND_URL'] ?? 'http://localhost:3000',
-  'https://fixedline.app',
-  'https://www.fixedline.app',
-];
+// FRONTEND_URL may hold one origin or a comma-separated list
+const allowedOrigins = (process.env['FRONTEND_URL'] ?? 'http://localhost:3000')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
